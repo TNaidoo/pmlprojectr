@@ -1,0 +1,73 @@
+---
+title: "PML Project"
+author: "Thrish"
+date: "2020-10-18"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(caret)
+library(pmlprojectr)
+source("./data-raw/pml_training.R")
+source("./data-raw/pml_testing.R")
+library(Hmisc)
+```
+
+## Raw Data
+
+The data for this project was sourced from  <http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har>.
+
+The data is available as two datasets: *pml_training* (training set); *pml_testing* (testing set).
+
+### Exploratory Analysis and Data Transformation
+
+The accerelometer data was extracted from the training dataset as the fields used in the modeling. Correlations across these fields were checked to isolate any components which might be highly correlated with another, and hence can be excluded from the model.
+
+```{r data}
+# summary(pml_training)
+train_colnames <- colnames(pml_training)
+sub_training <- pml_training[, c("classe", train_colnames[grepl("accel_", train_colnames)])]
+sub_training <- sub_training[, !(grepl("var_", colnames(sub_training)))]
+correlations <- Hmisc::rcorr(as.matrix(sub_training[,-c(1)]))
+corr_matrix <- correlations$r
+
+```
+
+## Training using Random Forest including 10-fold Cross Validation
+
+A random forest model is fitted with the inclusion of a 10-fold cross validation.
+
+```{r rf_train}
+set.seed(123)
+train_control <- trainControl(method = "cv", number = 10)
+mod_fit_rf <- caret::train(classe ~ ., method = "rf", data = sub_training, trControl = train_control)
+caret::confusionMatrix(mod_fit_rf)
+
+```
+
+On average, this model should correctly predict the result about 95 out of 100 times.
+
+## Behaviour of model on test set
+
+### Clean and transform test dataset
+
+Subset of test data to match the fields chosen for the model.
+
+```{r test_set}
+test_colnames <- colnames(pml_testing)
+sub_testing <- pml_testing[, test_colnames[grepl("accel_", test_colnames)]]
+sub_testing <- sub_testing[, !(grepl("var_", colnames(sub_testing)))]
+
+```
+
+### Predictions of Testing Set
+
+The below are the predictions resulting from applying the random forest model to the test data.
+
+```{r pred_1}
+predict(mod_fit_rf, sub_testing)
+
+```
+
+The predictions resulted in 18 out of 20 correct predictions (as per the quiz results).
